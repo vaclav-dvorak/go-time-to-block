@@ -4,13 +4,12 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	log "github.com/sirupsen/logrus"
 )
-
-const inputDate = "22.02.2022 22:22+GMT"
 
 var (
 	errStyle = lipgloss.NewStyle().
@@ -23,6 +22,9 @@ var (
 			Background(lipgloss.Color("63"))
 )
 
+type updateMsg struct{ resp resp }
+type errMsg struct{ err error }
+
 type resp struct {
 	Top    int
 	Bottom int
@@ -31,8 +33,11 @@ type resp struct {
 
 type model struct {
 	textInput textinput.Model
+	spinner   spinner.Model
+	date      time.Time
 	err       error
 	res       resp
+	updating  bool
 }
 
 func initialModel() model {
@@ -42,10 +47,17 @@ func initialModel() model {
 	ti.CharLimit = 20
 	ti.Width = 20
 
+	s := spinner.NewModel()
+	s.Spinner = spinner.MiniDot
+	s.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("209"))
+
 	return model{
 		textInput: ti,
+		spinner:   s,
+		date:      time.Time{},
 		err:       nil,
 		res:       resp{},
+		updating:  false,
 	}
 }
 
@@ -54,31 +66,49 @@ func (m model) Init() tea.Cmd {
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	var cmd tea.Cmd
+	var (
+		cmd  tea.Cmd
+		cmds []tea.Cmd
+	)
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "q", "esc", "ctrl+c":
-			return m, tea.Quit
+			cmds = append(cmds, tea.Quit)
 		case "enter":
 			m.err = nil
 			date, err := time.Parse("02.01.2006 15:04+MST", m.textInput.Value())
 			if err != nil {
 				m.err = err
-				return m, nil
+				break
 			}
-			r, err := getBlockData(date)
-			if err != nil {
-				m.err = err
-				return m, nil
-			}
-			m.res = r
-			return m, nil
+			m.date = date
+			m.updating = true
+			cmds = append(cmds, m.spinner.Tick, updateTime(m))
+		}
+
+	case errMsg:
+		m.updating = false
+		m.err = msg.err
+		m.res = resp{}
+
+	case updateMsg:
+		m.updating = false
+		m.res = msg.resp
+		m.err = nil
+
+	case spinner.TickMsg:
+		if m.updating {
+			m.spinner, cmd = m.spinner.Update(msg)
+			cmds = append(cmds, cmd)
 		}
 	}
+
 	m.textInput, cmd = m.textInput.Update(msg)
-	return m, cmd
+	cmds = append(cmds, cmd)
+
+	return m, tea.Batch(cmds...)
 }
 
 func (m model) View() (ret string) {
@@ -86,6 +116,8 @@ func (m model) View() (ret string) {
 	ret += fmt.Sprintf("Input date you want to convert?\n\n%s", m.textInput.View())
 	if m.err != nil {
 		ret += fmt.Sprintf("\n\n\n%s\n", errStyle.Render(fmt.Sprintf("✘ - %s", m.err)))
+	} else if m.updating {
+		ret += fmt.Sprintf("\n\n\nConverting...%s\n", m.spinner.View())
 	} else {
 		ret += fmt.Sprintf("\n\n%s", renderResp(m.res))
 	}
@@ -106,4 +138,14 @@ func renderResp(r resp) string {
 		return "\n\n"
 	}
 	return fmt.Sprintf("👆 After block:     %s\n👉 Exact blocktime: %s\n👇 Before block:    %s", blockStyle.Render(fmt.Sprintf("%d", r.Top)), blockStyle.Render(fmt.Sprintf("%.2f", r.Middle)), blockStyle.Render(fmt.Sprintf("%d", r.Bottom)))
+}
+
+func updateTime(m model) tea.Cmd {
+	return func() tea.Msg {
+		resp, err := getBlockData(m.date)
+		if err != nil {
+			return errMsg{err}
+		}
+		return updateMsg{resp}
+	}
 }

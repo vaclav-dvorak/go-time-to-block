@@ -22,7 +22,6 @@ func getBlockData(tim time.Time) (out resp, err error) {
 	var (
 		data blockResponse
 	)
-
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(time.Second*timeoutSec))
 	defer cancel()
 	req, _ := http.NewRequestWithContext(ctx, "GET", fmt.Sprintf("https://blockchain.info/blocks/%d?format=json", tim.Add(time.Hour).UnixMilli()), nil)

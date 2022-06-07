@@ -38,6 +38,7 @@ type model struct {
 	err       error
 	res       resp
 	updating  bool
+	quitting  bool
 }
 
 func initialModel() model {
@@ -58,6 +59,7 @@ func initialModel() model {
 		err:       nil,
 		res:       resp{},
 		updating:  false,
+		quitting:  false,
 	}
 }
 
@@ -75,6 +77,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "q", "esc", "ctrl+c":
+			m.quitting = true
 			cmds = append(cmds, tea.Quit)
 		case "enter":
 			m.err = nil
@@ -112,6 +115,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m model) View() (ret string) {
+	if m.quitting {
+		return "Bye!\n"
+	}
+
 	ret = ""
 	ret += fmt.Sprintf("Input date you want to convert?\n\n%s", m.textInput.View())
 	if m.err != nil {

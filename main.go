@@ -76,7 +76,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
-		case "q", "esc", "ctrl+c":
+		case "esc", "ctrl+c":
 			m.quitting = true
 			cmds = append(cmds, tea.Quit)
 		case "enter":
@@ -128,7 +128,7 @@ func (m model) View() (ret string) {
 	} else {
 		ret += fmt.Sprintf("\n\n%s", renderResp(m.res))
 	}
-	ret += fmt.Sprintf("\n\n%s\n", lipgloss.NewStyle().Foreground(lipgloss.Color("240")).Render("esc/q to quit"))
+	ret += fmt.Sprintf("\n\n%s\n", lipgloss.NewStyle().Foreground(lipgloss.Color("240")).Render("esc to quit"))
 	return
 }
 
